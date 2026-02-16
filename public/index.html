@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sid's COP4331 Color App</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; max-width: 820px; }
+    h1 { margin: 0 0 12px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 14px 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    label { display: block; font-size: 12px; color: #444; margin-bottom: 6px; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+    button { padding: 10px 14px; border: 1px solid #333; background: #111; color: #fff; border-radius: 8px; cursor: pointer; }
+    button.secondary { background: #fff; color: #111; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .field { flex: 1; min-width: 220px; }
+    .status { margin-top: 10px; font-size: 13px; }
+    .status.ok { color: #0a7a2f; }
+    .status.err { color: #b00020; }
+    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #f2f2f2; font-size: 12px; }
+    ul { margin: 10px 0 0; padding-left: 18px; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+    .small { font-size: 12px; color: #555; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>COP4331 Colors</h1>
+    <span class="pill" id="serverPill">API: <code id="apiBaseLabel"></code></span>
+  </div>
+  <div class="small">
+  </div>
+
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>Login</h2>
+    <div class="row">
+      <div class="field">
+        <label for="loginName">Login</label>
+        <input id="loginName" type="text" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="loginPass">Password</label>
+        <input id="loginPass" type="password" autocomplete="current-password" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <button id="loginBtn">Login</button>
+      <button class="secondary" id="clearBtn" type="button">Clear</button>
+    </div>
+    <div id="loginStatus" class="status"></div>
+  </div>
+
+  <!-- APP -->
+  <div class="card" id="appCard" style="display:none;">
+    <div class="topbar">
+      <h2>Colors</h2>
+      <div class="row" style="margin:0;">
+        <span class="pill">Logged in as: <span id="whoami"></span></span>
+        <button class="secondary" id="logoutBtn" type="button">Logout</button>
+      </div>
+    </div>
+
+    <h3>Add a Color</h3>
+    <div class="row">
+      <div class="field">
+        <label for="addColorInput">Color name</label>
+        <input id="addColorInput" type="text" />
+      </div>
+      <div class="field" style="flex:0 0 180px;">
+        <label>&nbsp;</label>
+        <button id="addColorBtn">Add Color</button>
+      </div>
+    </div>
+    <div id="addStatus" class="status"></div>
+
+    <hr style="margin:18px 0; border:none; border-top:1px solid #eee;" />
+
+    <h3>Search Colors</h3>
+    <div class="row">
+      <div class="field">
+        <label for="searchInput">Search</label>
+        <input id="searchInput" type="text" />
+      </div>
+      <div class="field" style="flex:0 0 180px;">
+        <label>&nbsp;</label>
+        <button id="searchBtn">Search</button>
+      </div>
+    </div>
+    <div id="searchStatus" class="status"></div>
+
+    <ul id="results"></ul>
+  </div>
+
+  <script>
+    // ====== CONFIG ======
+    // If your PHP endpoints live at: http(s)://YOURDOMAIN.com/LAMPAPI/
+    // then leave API_BASE as "/LAMPAPI".
+    // If you put index.html inside /var/www/html/ (or /var/www/html/LAMPAPI),
+    // relative paths will work fine.
+    const API_BASE = "/LAMPAPI"; // change to "" if your php files are in the same folder as index.html
+
+    const ENDPOINTS = {
+      login: `${API_BASE}/Login.php`,
+      addColor: `${API_BASE}/AddColor.php`,
+      searchColors: `${API_BASE}/SearchColors.php`,
+    };
+
+    // ====== STATE ======
+    let userId = null;
+    let firstName = "";
+    let lastName = "";
+    let loginName = "";
+
+    // ====== DOM ======
+    const apiBaseLabel = document.getElementById("apiBaseLabel");
+    apiBaseLabel.textContent = API_BASE || "/";
+
+    const loginCard = document.getElementById("loginCard");
+    const appCard = document.getElementById("appCard");
+
+    const loginNameEl = document.getElementById("loginName");
+    const loginPassEl = document.getElementById("loginPass");
+    const loginBtn = document.getElementById("loginBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const loginStatus = document.getElementById("loginStatus");
+
+    const whoami = document.getElementById("whoami");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    const addColorInput = document.getElementById("addColorInput");
+    const addColorBtn = document.getElementById("addColorBtn");
+    const addStatus = document.getElementById("addStatus");
+
+    const searchInput = document.getElementById("searchInput");
+    const searchBtn = document.getElementById("searchBtn");
+    const searchStatus = document.getElementById("searchStatus");
+    const results = document.getElementById("results");
+
+    // ====== HELPERS ======
+    function setStatus(el, msg, ok) {
+      el.textContent = msg || "";
+      el.className = "status " + (ok ? "ok" : "err");
+      if (!msg) el.className = "status";
+    }
+
+    function showLoggedOutUI() {
+      loginCard.style.display = "";
+      appCard.style.display = "none";
+      whoami.textContent = "";
+      setStatus(addStatus, "", true);
+      setStatus(searchStatus, "", true);
+      results.innerHTML = "";
+    }
+
+    function showLoggedInUI() {
+      loginCard.style.display = "none";
+      appCard.style.display = "";
+      whoami.textContent = `${firstName} ${lastName} (userId=${userId})`;
+    }
+
+    async function postJson(url, bodyObj) {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyObj),
+      });
+
+      // Some PHP setups may not set correct content-type; still parse as text then JSON.
+      const text = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Non-JSON response from ${url}: ${text.slice(0, 200)}`);
+      }
+      return data;
+    }
+
+    // ====== ACTIONS ======
+    async function doLogin() {
+      const login = loginNameEl.value.trim();
+      const password = loginPassEl.value;
+
+      setStatus(loginStatus, "", true);
+
+      if (!login || !password) {
+        setStatus(loginStatus, "Please enter login and password.", false);
+        return;
+      }
+
+      loginBtn.disabled = true;
+      try {
+        // Typical COP4331 Login.php expects: {login:"", password:""}
+        const data = await postJson(ENDPOINTS.login, { login, password });
+
+        // Many sample APIs return: { id, firstName, lastName, error }
+        if (data.error && data.error.length > 0) {
+          setStatus(loginStatus, data.error, false);
+          return;
+        }
+
+        // Some implementations use "id" or "userId"
+        userId = data.id ?? data.userId ?? null;
+        firstName = data.firstName ?? "";
+        lastName = data.lastName ?? "";
+        loginName = login;
+
+        if (!userId) {
+          setStatus(loginStatus, "Login response did not include a user id. Check Login.php output fields.", false);
+          return;
+        }
+
+        setStatus(loginStatus, "Login successful.", true);
+        showLoggedInUI();
+
+        // Optional: auto-search all colors by searching empty string
+        searchInput.value = "";
+        await doSearch();
+
+      } catch (e) {
+        setStatus(loginStatus, e.message || "Login failed.", false);
+      } finally {
+        loginBtn.disabled = false;
+      }
+    }
+
+    function doLogout() {
+      userId = null;
+      firstName = "";
+      lastName = "";
+      loginName = "";
+      loginPassEl.value = "";
+      showLoggedOutUI();
+      setStatus(loginStatus, "Logged out.", true);
+    }
+
+    async function doAddColor() {
+      const color = addColorInput.value.trim();
+      setStatus(addStatus, "", true);
+
+      if (!userId) {
+        setStatus(addStatus, "You are not logged in.", false);
+        return;
+      }
+      if (!color) {
+        setStatus(addStatus, "Enter a color name to add.", false);
+        return;
+      }
+
+      addColorBtn.disabled = true;
+      try {
+        // Sample AddColor.php expects: { color:"", userId: <id> }
+        const data = await postJson(ENDPOINTS.addColor, { color, userId });
+
+        if (data.error && data.error.length > 0) {
+          setStatus(addStatus, data.error, false);
+          return;
+        }
+
+        setStatus(addStatus, `Added "${color}".`, true);
+        addColorInput.value = "";
+
+        // Immediately search for it to show persistence within session
+        searchInput.value = color;
+        await doSearch();
+
+      } catch (e) {
+        setStatus(addStatus, e.message || "Add color failed.", false);
+      } finally {
+        addColorBtn.disabled = false;
+      }
+    }
+
+    async function doSearch() {
+      const search = searchInput.value.trim();
+      setStatus(searchStatus, "", true);
+      results.innerHTML = "";
+
+      if (!userId) {
+        setStatus(searchStatus, "You are not logged in.", false);
+        return;
+      }
+
+      searchBtn.disabled = true;
+      try {
+        // Typical SearchColors.php expects: { search:"", userId:<id> }
+        const data = await postJson(ENDPOINTS.searchColors, { search, userId });
+
+        if (data.error && data.error.length > 0) {
+          setStatus(searchStatus, data.error, false);
+          return;
+        }
+
+        // Common formats:
+        // 1) { results: "Blue\nWhite\n", error: "" }
+        // 2) { results: ["Blue","White"], error: "" }
+        // 3) { colors: [...], error:"" }
+        let items = [];
+
+        if (Array.isArray(data.results)) {
+          items = data.results;
+        } else if (typeof data.results === "string") {
+          items = data.results.split("\n").map(s => s.trim()).filter(Boolean);
+        } else if (Array.isArray(data.colors)) {
+          items = data.colors;
+        }
+
+        if (!items.length) {
+          setStatus(searchStatus, "No matches.", true);
+          return;
+        }
+
+        setStatus(searchStatus, `Found ${items.length} result(s).`, true);
+
+        // If items are objects, try to render Name/ID
+        const liHtml = items.map(it => {
+          if (typeof it === "string") return `<li>${escapeHtml(it)}</li>`;
+          if (it && typeof it === "object") {
+            const name = it.Name ?? it.name ?? JSON.stringify(it);
+            return `<li>${escapeHtml(String(name))}</li>`;
+          }
+          return `<li>${escapeHtml(String(it))}</li>`;
+        }).join("");
+
+        results.innerHTML = liHtml;
+
+      } catch (e) {
+        setStatus(searchStatus, e.message || "Search failed.", false);
+      } finally {
+        searchBtn.disabled = false;
+      }
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // ====== EVENTS ======
+    loginBtn.addEventListener("click", doLogin);
+    clearBtn.addEventListener("click", () => {
+      loginNameEl.value = "";
+      loginPassEl.value = "";
+      setStatus(loginStatus, "", true);
+    });
+
+    logoutBtn.addEventListener("click", doLogout);
+    addColorBtn.addEventListener("click", doAddColor);
+    searchBtn.addEventListener("click", doSearch);
+
+    // Enter-to-submit convenience
+    loginPassEl.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+    addColorInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doAddColor(); });
+    searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+
+    // Start in logged-out state
+    showLoggedOutUI();
+  </script>
+</body>
+</html>
