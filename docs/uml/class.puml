@@ -1,0 +1,61 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+class User {
+  +id : int
+  +firstName : string
+  +lastName : string
+  +login : string
+  +password : string
+}
+
+class Color {
+  +name : string
+  +userId : int
+}
+
+class IndexPage {
+  +displayLoginForm()
+  +displayColorManagement()
+  +submitLogin()
+  +submitAddColor()
+  +submitSearch()
+  +logout()
+}
+
+class LoginAPI {
+  +login(login, password)
+  +returnWithInfo()
+  +returnWithError()
+}
+
+class AddColorAPI {
+  +addColor(userId, colorName)
+  +returnWithError()
+}
+
+class SearchColorsAPI {
+  +searchColors(userId, searchText)
+  +returnWithInfo()
+  +returnWithError()
+}
+
+class Database {
+  +Users
+  +Colors
+  +connect()
+  +query()
+}
+
+IndexPage ..> LoginAPI : sends login request
+IndexPage ..> AddColorAPI : sends add request
+IndexPage ..> SearchColorsAPI : sends search request
+
+LoginAPI ..> Database : queries
+AddColorAPI ..> Database : inserts
+SearchColorsAPI ..> Database : searches
+
+Database "1" o-- "*" User
+Database "1" o-- "*" Color
+User "1" -- "*" Color : owns
+@enduml
