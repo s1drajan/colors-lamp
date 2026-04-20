@@ -1,0 +1,78 @@
+## ──────────────────────────────────────────────────────────────────────────────
+## .github/workflows/ci.yml
+##
+## CI pipeline for the COLORS LAMP application.
+## Runs on every push and pull request to any branch.
+##
+## Jobs:
+##   1. lint   – ESLint · Stylelint · HTMLHint  (from Assignment 4)
+##   2. test   – Jest unit + integration tests   (added in Assignment 5)
+## ──────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ── Job 1: Linting (unchanged from Assignment 4) ──────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npx eslint .
+
+      - name: Run Stylelint
+        run: npx stylelint "**/*.css"
+
+      - name: Run HTMLHint
+        run: npx htmlhint "**/*.html"
+
+  # ── Job 2: Automated Tests (Assignment 5) ─────────────────────────────────
+  test:
+    name: Test (Jest)
+    runs-on: ubuntu-latest
+    # Tests run after linting – no point running them on broken code
+    needs: lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit and integration tests
+        run: npm test
+
+      - name: Upload test coverage report
+        # Upload even if tests fail so you can inspect the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
