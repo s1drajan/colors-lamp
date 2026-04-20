@@ -8,13 +8,14 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "lint": "eslint . && stylelint \"**/*.css\" && htmlhint \"**/*.html\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "jest": "^29.7.0",
     "eslint": "^10.2.0",
     "htmlhint": "^1.9.2",
     "stylelint": "^17.6.0",
